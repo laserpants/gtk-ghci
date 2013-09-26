@@ -2,8 +2,8 @@
 
 struct _CommandEntryPrivate
 {
-    GList       *history;
-    GList       *commands;
+    GList       *history,
+                *commands;
     gint         index,
                  count;
 };

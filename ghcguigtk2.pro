@@ -6,7 +6,8 @@ CONFIG -= qt
 SOURCES += main.c \
     processio.c \
     ui.c \
-    commandentry.c
+    commandentry.c \
+    tabcomplete.c
 
 INCLUDEPATH += /usr/include/gtk-3.0
 INCLUDEPATH += /usr/include/glib-2.0
@@ -17,5 +18,6 @@ PKGCONFIG += gtk+-3.0
 HEADERS += \
     processio.h \
     ui.h \
-    commandentry.h
+    commandentry.h \
+    tabcomplete.h
 
