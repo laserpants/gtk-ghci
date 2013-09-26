@@ -20,6 +20,7 @@ typedef struct _CommandEntryClass      CommandEntryClass;
 enum {
     ENTER_PRESS,
     TAB_PRESS,
+    AUTO_COMPLETE,
     LAST_SIGNAL
 };
 
@@ -35,8 +36,9 @@ struct _CommandEntryClass
 {
     GtkEntryClass parent_class;
 
-    void (* enter_press) (CommandEntry *entry);
-    void (* tab_press)   (CommandEntry *entry);
+    void (* enter_press)   (CommandEntry *entry);
+    void (* tab_press)     (CommandEntry *entry);
+    void (* auto_complete) (CommandEntry *entry);
 };
 
 GType       command_entry_get_type     (void) G_GNUC_CONST;

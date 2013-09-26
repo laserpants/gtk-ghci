@@ -92,11 +92,27 @@ auto_complete (CommandEntry *self, gchar *cmd)
 }
 
 static void
+collect (gchar *needle, GString **haystack)
+{
+    if (needle) {
+        *haystack = g_string_append (*haystack, needle);
+        if ('\n' != *needle)
+            *haystack = g_string_append (*haystack, "\t");
+    }
+}
+
+static void
 on_tab (CommandEntry *entry)
 {
     GList *res;
     gchar *input;
     guint  listlen;
+
+    g_signal_emit_by_name (entry, "tab-press");
+
+    if (!gtk_entry_get_text_length (GTK_ENTRY (entry))) {
+        return;
+    }
 
     /* Attempt auto-complete */
     input = g_strdup (gtk_entry_get_text (GTK_ENTRY (entry)));
@@ -108,7 +124,11 @@ on_tab (CommandEntry *entry)
             gtk_entry_set_text (GTK_ENTRY (entry), g_list_first (res)->data);
             gtk_editable_set_position (GTK_EDITABLE (entry), -1);
         } else {
-            //g_list_foreach (res, (GFunc) print_to_view, priv->view);
+            GString *str = g_string_new (NULL);
+            g_list_foreach (res, (GFunc) collect, &str);
+            str = g_string_append (str, "\n");
+            g_signal_emit_by_name (entry, "auto-complete", str);
+            g_string_free (str, TRUE);
         }
         g_list_free_full (res, g_free);
     }
@@ -157,7 +177,6 @@ on_key_pressed (GtkEntry                  *entry,
         }
         return TRUE;
     case GDK_KEY_Tab:
-        g_signal_emit_by_name (entry, "tab-press");
         on_tab (self);
         return TRUE;
     default:
@@ -204,6 +223,15 @@ command_entry_class_init (CommandEntryClass *klass)
                           NULL, NULL,
                           NULL,
                           G_TYPE_NONE, 0);
+
+    _signals[AUTO_COMPLETE] =
+            g_signal_new ("auto-complete",
+                          G_OBJECT_CLASS_TYPE (gobject_class),
+                          G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+                          G_STRUCT_OFFSET (CommandEntryClass, auto_complete),
+                          NULL, NULL,
+                          NULL,
+                          G_TYPE_NONE, 1, G_TYPE_POINTER);
 }
 
 /**

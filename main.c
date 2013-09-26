@@ -123,6 +123,14 @@ print_out (GtkTextView   *view,
 }
 
 static void
+on_auto_complete (GtkWidget  G_GNUC_UNUSED *button,
+                  GString                  *data,
+                  app                      *obj)
+{
+    print_out (GTK_TEXT_VIEW (obj->ui->view), (guint8 *) data->str, data->len);
+}
+
+static void
 process (app    *obj,
          gsize   bytes,
          gchar  *data)
@@ -302,6 +310,10 @@ activate (GtkApplication                *application,
 
     g_signal_connect (G_OBJECT (obj->ui->entry), "enter-press",
                       G_CALLBACK (on_button_clicked),
+                      obj);
+
+    g_signal_connect (G_OBJECT (obj->ui->entry), "auto-complete",
+                      G_CALLBACK (on_auto_complete),
                       obj);
 }
 
