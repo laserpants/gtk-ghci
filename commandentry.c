@@ -1,9 +1,12 @@
+#include <string.h>
 #include "commandentry.h"
 
 struct _CommandEntryPrivate
 {
     GList       *history,
                 *commands;
+    GSequence   *wordbank;
+    GCompareDataFunc cmp_func;
     gint         index,
                  count;
 };
@@ -49,6 +52,70 @@ command_entry_navigate (CommandEntry *entry, gboolean up)
                        g_list_nth_data (priv->commands, priv->index));
 }
 
+static void
+list_append (gchar *str, GList **list)
+{
+    *list = g_list_prepend (*list, g_strdup (str));
+}
+
+static GList *
+auto_complete (CommandEntry *self, gchar *cmd)
+{
+    CommandEntryPrivate *priv = self->priv;
+    GList               *str_list;
+    GSequenceIter       *begin_iter,
+                        *end_iter;
+    gchar               *dup;
+    size_t               len;
+
+    begin_iter = g_sequence_lookup (priv->wordbank, cmd, priv->cmp_func, NULL);
+    if (!begin_iter) {
+        begin_iter = g_sequence_search (priv->wordbank, cmd, priv->cmp_func, NULL);
+    }
+
+    dup = g_strdup (cmd);
+    len = strlen (cmd);
+    ++dup[len - 1];
+
+    end_iter = g_sequence_search (priv->wordbank, dup, priv->cmp_func, NULL);
+    g_free (dup);
+
+    if (begin_iter == end_iter) {
+        return NULL;
+    }
+
+    str_list = g_list_alloc ();
+    g_sequence_foreach_range (begin_iter, end_iter,
+                              (GFunc) list_append,
+                              &str_list);
+    return str_list;
+}
+
+static void
+on_tab (CommandEntry *entry)
+{
+    GList *res;
+    gchar *input;
+    guint  listlen;
+
+    /* Attempt auto-complete */
+    input = g_strdup (gtk_entry_get_text (GTK_ENTRY (entry)));
+
+    res = auto_complete (entry, input);
+    if (res) {
+        listlen = g_list_length (res);
+        if (2 == listlen) {
+            gtk_entry_set_text (GTK_ENTRY (entry), g_list_first (res)->data);
+            gtk_editable_set_position (GTK_EDITABLE (entry), -1);
+        } else {
+            //g_list_foreach (res, (GFunc) print_to_view, priv->view);
+        }
+        g_list_free_full (res, g_free);
+    }
+
+    g_free (input);
+}
+
 static gboolean
 on_key_pressed (GtkEntry                  *entry,
                 GdkEventKey               *event,
@@ -91,6 +158,7 @@ on_key_pressed (GtkEntry                  *entry,
         return TRUE;
     case GDK_KEY_Tab:
         g_signal_emit_by_name (entry, "tab-press");
+        on_tab (self);
         return TRUE;
     default:
         break;
@@ -155,6 +223,8 @@ command_entry_init (CommandEntry *self)
 
     priv->history  = NULL;
     priv->commands = NULL;
+    priv->wordbank = g_sequence_new (g_free);
+    priv->cmp_func = (GCompareDataFunc) g_strcmp0;
     priv->index    = 0;
     priv->count    = 1;
 }
@@ -172,9 +242,14 @@ command_entry_dispose (GObject *object)
 
     g_list_free_full (priv->commands, (GDestroyNotify) g_free);
     g_list_free_full (priv->history,  (GDestroyNotify) g_free);
+    if (priv->wordbank) {
+        g_sequence_free (priv->wordbank);
+    }
 
     priv->commands = NULL;
     priv->history  = NULL;
+    priv->wordbank = NULL;
+    priv->cmp_func = NULL;
 
     G_OBJECT_CLASS (command_entry_parent_class)->dispose (object);
 }
@@ -195,4 +270,26 @@ GtkWidget *
 command_entry_new (void)
 {
     return g_object_new (TYPE_COMMAND_ENTRY, NULL);
+}
+
+void
+command_entry_insert_word (CommandEntry *self, gchar *word)
+{
+    CommandEntryPrivate *priv = COMMAND_ENTRY_GET_PRIVATE (self);
+
+    g_sequence_insert_sorted (priv->wordbank, g_strdup (word),
+                              priv->cmp_func, NULL);
+}
+
+void
+command_entry_remove_word (CommandEntry *self, gchar *word)
+{
+    GSequenceIter *iter;
+    CommandEntryPrivate *priv = COMMAND_ENTRY_GET_PRIVATE (self);
+
+    iter = g_sequence_lookup (priv->wordbank, word, priv->cmp_func, NULL);
+
+    if (iter) {
+        g_sequence_remove (iter);
+    }
 }

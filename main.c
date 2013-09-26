@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "processio.h"
-#include "tabcomplete.h"
 #include "ui.h"
 
 typedef struct _app app;
@@ -13,7 +12,6 @@ struct _app
     GtkWidget    *window;
     pio_env      *io_env;
     struct _ui   *ui;
-    completer    *autocompl;
     guchar        tail[TAIL_SIZE];
     guint8        tlen;
     gboolean      ctrlc;
@@ -28,7 +26,6 @@ on_window_destroy (GtkWidget G_GNUC_UNUSED *object,
         g_message ("SIGKILL");
     }
 
-    completer_free (obj->autocompl);
     g_free (obj->ui);
     g_free (obj);
 
@@ -259,47 +256,6 @@ io_read (GIOChannel     *channel,
 }
 
 static void
-print_to_view (gchar *str,
-               app   *obj)
-{
-    GtkTextView *view = GTK_TEXT_VIEW (obj->ui->view);
-    if (str) {
-        print_out (view, (guint8 *) str, strlen (str));
-        if ('\n' != *str)
-            print_out (view, (guint8 *) "\t", 1);
-    }
-}
-
-static void
-on_tab (GtkWidget  G_GNUC_UNUSED *widget,
-        app                      *obj)
-{
-    GList *res;
-    gchar *input;
-    guint  listlen;
-
-    /* Attempt auto-complete */
-    input = g_strdup (gtk_entry_get_text (GTK_ENTRY (obj->ui->entry)));
-
-    res = auto_complete (obj->autocompl, input);
-    if (res) {
-        listlen = g_list_length (res);
-        if (2 == listlen) {
-            gtk_entry_set_text (GTK_ENTRY (obj->ui->entry),
-                                g_list_first(res)->data);
-
-            gtk_editable_set_position (GTK_EDITABLE (obj->ui->entry), -1);
-        } else {
-            g_list_foreach (res, (GFunc) print_to_view, obj);
-            print_to_view ("\n", obj);
-        }
-        g_list_free_full (res, g_free);
-    }
-
-    g_free (input);
-}
-
-static void
 activate (GtkApplication                *application,
           gpointer        G_GNUC_UNUSED  user_data)
 {
@@ -309,7 +265,6 @@ activate (GtkApplication                *application,
     obj         = g_malloc0 (sizeof (app));
     obj->io_env = g_malloc0 (sizeof (pio_env));
     obj->window = gtk_application_window_new (application);
-    obj->autocompl = completer_new ();
 
     /* Initialize child process */
     args = g_malloc_n (5, sizeof (gchar *));
@@ -347,10 +302,6 @@ activate (GtkApplication                *application,
 
     g_signal_connect (G_OBJECT (obj->ui->entry), "enter-press",
                       G_CALLBACK (on_button_clicked),
-                      obj);
-
-    g_signal_connect (G_OBJECT (obj->ui->entry), "tab-press",
-                      G_CALLBACK (on_tab),
                       obj);
 }
 

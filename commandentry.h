@@ -41,6 +41,8 @@ struct _CommandEntryClass
 
 GType       command_entry_get_type     (void) G_GNUC_CONST;
 GtkWidget  *command_entry_new          (void);
+void        command_entry_insert_word  (CommandEntry *self, gchar *word);
+void        command_entry_remove_word  (CommandEntry *self, gchar *word);
 
 G_END_DECLS
 

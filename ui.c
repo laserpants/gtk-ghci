@@ -58,5 +58,20 @@ init_ui (GtkWidget *window)
     ui_struct->entry = entry;
     ui_struct->view  = view;
 
+    //
+
+    command_entry_insert_word (COMMAND_ENTRY (entry), "acosh");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "and");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "banan");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "atan");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "appendFile");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "asin");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "atanh");
+    command_entry_insert_word (COMMAND_ENTRY (entry), "abs");
+
+    command_entry_remove_word (COMMAND_ENTRY (entry), "acosh");
+
+    //
+
     return ui_struct;
 }
