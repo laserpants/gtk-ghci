@@ -7,6 +7,14 @@
 
 typedef struct _app app;
 
+enum {
+    READSTATE_USER = 0,
+    READSTATE_PROMPT,
+    READSTATE_BINDINGS,
+    READSTATE_IMPORTS,
+    LAST_READSTATE
+};
+
 struct _app
 {
     GtkWidget    *window;
@@ -15,6 +23,7 @@ struct _app
     guchar        tail[TAIL_SIZE];
     guint8        tlen;
     gboolean      ctrlc;
+    guint8        state;
 };
 
 static gboolean
@@ -99,7 +108,7 @@ scroll_to_end (GtkTextView *view)
     gtk_scrollable_set_vadjustment (GTK_SCROLLABLE (view), adj);
 
     while (gtk_events_pending ()) {
-        gtk_main_iteration();
+        gtk_main_iteration ();
     }
 }
 
@@ -148,8 +157,12 @@ process (app    *obj,
 
         if (x) {
             /* Flush out x first characters currently in tail buffer */
-            print_out (GTK_TEXT_VIEW (obj->ui->view),
-                       obj->tail, x);
+
+            if (obj->io_env->io_err == obj->io_env->active
+                    || READSTATE_USER == obj->state) {
+                print_out (GTK_TEXT_VIEW (obj->ui->view),
+                           obj->tail, x);
+            }
 
             if (t && x < t) {
                 /* Shift tail buffer to the left x steps */
@@ -165,8 +178,12 @@ process (app    *obj,
 
         s = TAIL_SIZE - obj->tlen;
         /* Flush out read buffer, but leave enough for tail... */
-        print_out (GTK_TEXT_VIEW (obj->ui->view),
-                   (guint8 *) data, bytes - s);
+
+        if (obj->io_env->io_err == obj->io_env->active
+                || READSTATE_USER == obj->state) {
+            print_out (GTK_TEXT_VIEW (obj->ui->view),
+                       (guint8 *) data, bytes - s);
+        }
 
         if (s) {
             g_assert (obj->tlen + s <= TAIL_SIZE);
@@ -202,7 +219,7 @@ io_read (GIOChannel     *channel,
         if (obj->ctrlc) {
             while (g_io_channel_get_buffer_condition (channel) & G_IO_IN) {
                 g_io_channel_flush (channel, NULL);
-                g_usleep(500);
+                g_usleep (500);
             }
 
             obj->tlen = 0;
@@ -210,11 +227,6 @@ io_read (GIOChannel     *channel,
         }
 
         if (bytes) {
-
-            /* -->
-            read_buf->data[bytes] = '\0';
-            g_message ("%s", read_buf->data);
-            <-- */
 
             if (!obj->io_env->active) {
                 /* Set this channel as active */
@@ -224,7 +236,7 @@ io_read (GIOChannel     *channel,
 
                 /* Keep UI responsive */
                 while (gtk_events_pending ()) {
-                    gtk_main_iteration();
+                    gtk_main_iteration ();
                 }
 
                 return TRUE;
@@ -249,12 +261,39 @@ io_read (GIOChannel     *channel,
 
                 obj->tlen = 0;
                 obj->io_env->active = NULL;
+
+                /* Respond according to application state */
+                switch (++obj->state)
+                {
+                case READSTATE_PROMPT:
+                    g_io_channel_write_chars (obj->io_env->io_in,
+                                              ":set prompt \"Prelude> \"\n", -1,
+                                              NULL, NULL);
+                    g_io_channel_flush (obj->io_env->io_in, NULL);
+                    break;
+                case READSTATE_BINDINGS:
+                    g_io_channel_write_chars (obj->io_env->io_in,
+                                              ":show bindings\n", -1,
+                                              NULL, NULL);
+                    g_io_channel_flush (obj->io_env->io_in, NULL);
+                    break;
+                case READSTATE_IMPORTS:
+                    g_io_channel_write_chars (obj->io_env->io_in,
+                                              ":show imports\n", -1,
+                                              NULL, NULL);
+                    g_io_channel_flush (obj->io_env->io_in, NULL);
+                    break;
+                case LAST_READSTATE:
+                    obj->state = READSTATE_USER;
+                default:
+                    break;
+                }
             }
         }
 
         /* Keep UI responsive */
         while (gtk_events_pending ()) {
-            gtk_main_iteration();
+            gtk_main_iteration ();
         }
 
         return TRUE;

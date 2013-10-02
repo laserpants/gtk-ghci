@@ -105,8 +105,11 @@ static void
 on_tab (CommandEntry *entry)
 {
     GList *res;
-    gchar *input;
+    gchar *input,
+          **final,
+          **tokens;
     guint  listlen;
+    gsize  n;
 
     g_signal_emit_by_name (entry, "tab-press");
 
@@ -117,22 +120,44 @@ on_tab (CommandEntry *entry)
     /* Attempt auto-complete */
     input = g_strdup (gtk_entry_get_text (GTK_ENTRY (entry)));
 
-    res = auto_complete (entry, input);
-    if (res) {
-        listlen = g_list_length (res);
-        if (2 == listlen) {
-            gtk_entry_set_text (GTK_ENTRY (entry), g_list_first (res)->data);
-            gtk_editable_set_position (GTK_EDITABLE (entry), -1);
-        } else {
-            GString *str = g_string_new (NULL);
-            g_list_foreach (res, (GFunc) collect, &str);
-            str = g_string_append (str, "\n");
-            g_signal_emit_by_name (entry, "auto-complete", str);
-            g_string_free (str, TRUE);
+    tokens = g_strsplit (input, " ", -1);
+    final = tokens;
+
+    if (*final) {
+        n = 0;
+        while (*(final + 1)) {
+            /* Count the number of characters prior to final token */
+            n += strlen (*final) + 1;
+            ++final;
         }
-        g_list_free_full (res, g_free);
+
+        res = auto_complete (entry, *final);
+        if (res) {
+            listlen = g_list_length (res);
+            if (2 == listlen) {
+                GString *text;
+                text = g_string_new (gtk_entry_get_text (GTK_ENTRY (entry)));
+
+                /* Replace the last token with auto-completed string value */
+                text = g_string_truncate (text, n);
+                text = g_string_append (text, g_list_first (res)->data);
+
+                gtk_entry_set_text (GTK_ENTRY (entry), text->str);
+                gtk_editable_set_position (GTK_EDITABLE (entry), -1);
+
+                g_string_free (text, TRUE);
+            } else {
+                GString *str = g_string_new (NULL);
+                g_list_foreach (res, (GFunc) collect, &str);
+                str = g_string_append (str, "\n");
+                g_signal_emit_by_name (entry, "auto-complete", str);
+                g_string_free (str, TRUE);
+            }
+            g_list_free_full (res, g_free);
+        }
     }
 
+    g_strfreev (tokens);
     g_free (input);
 }
 
@@ -143,13 +168,17 @@ on_key_pressed (GtkEntry                  *entry,
 {
     CommandEntry *self = COMMAND_ENTRY (entry);
     CommandEntryPrivate *priv = self->priv;
+    const gchar *str;
 
     switch (event->keyval)
     {
     case GDK_KEY_Return:
     case GDK_KEY_KP_Enter:
-        priv->history = g_list_prepend (priv->history,
-            g_strdup (gtk_entry_get_text (GTK_ENTRY (entry))));
+        str = gtk_entry_get_text (GTK_ENTRY (entry));
+        if (!str || !strlen (str)) {
+            return TRUE;
+        }
+        priv->history = g_list_prepend (priv->history, g_strdup (str));
 
         /* Deep copy the history list to priv->commands */
         g_list_free_full (priv->commands, (GDestroyNotify) g_free);
